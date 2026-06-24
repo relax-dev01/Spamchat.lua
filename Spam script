@@ -1,1 +1,107 @@
+-- ==========================================
+-- AYARLAR
+-- ==========================================
+local MESSAGE = "Azerbaycan sohbet oyunu yaz gir" -- Spamlanacak mesaj
+local DELAY = 0.05 -- En hızlı spam süresi (Çok düşerse Roblox tamamen engelleyebilir, 0.05 idealdir)
+
+-- ==========================================
+-- SERVİSLER
+-- ==========================================
+local TeleportService = game:GetService("TeleportService")
+local HttpService = game:GetService("HttpService")
+local Players = game:GetService("Players")
+local TextChatService = game:GetService("TextChatService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local LocalPlayer = Players.LocalPlayer
+local jumped = false -- Çift tetiklenmeyi önlemek için flag
+
+-- ==========================================
+-- IŞINLANMA (SERVER HOP) FONKSİYONU
+-- ==========================================
+local function serverHop()
+    if jumped then return end
+    jumped = true
+    print("[SYSTEM] Sansür algılandı! Yeni sunucuya geçiliyor...")
+    
+    pcall(function()
+        local url = "https://games.roblox.com/v1/games/" .. game.PlaceId .. "/servers/Public?sortOrder=Asc&limit=100"
+        local raw = game:HttpGet(url)
+        local servers = HttpService:JSONDecode(raw)
+        
+        for _, server in pairs(servers.data) do
+            if server.playing < server.maxPlayers and server.id ~= game.JobId then
+                TeleportService:TeleportToPlaceInstance(game.PlaceId, server.id, LocalPlayer)
+                break
+            end
+        end
+    end)
+    
+    -- Eğer üstteki api patlarsa alternatif olarak direkt rastgele ışınla
+    task.wait(1)
+    TeleportService:Teleport(game.PlaceId, LocalPlayer)
+end
+
+-- ==========================================
+-- MESAJ GÖNDERME MOTORU
+-- ==========================================
+local function sendMessage(text)
+    -- Yeni nesil sohbet sistemi (TextChatService)
+    if TextChatService.ChatVersion == Enum.ChatVersion.TextChatService then
+        local textChannel = TextChatService:FindFirstChild("TextChannels") and TextChatService.TextChannels:FindFirstChild("RBXGeneral")
+        if textChannel then
+            textChannel:SendAsync(text)
+            return
+        end
+    end
+    
+    -- Eski nesil sohbet sistemi (LegacyChat)
+    local remote = ReplicatedStorage:FindFirstChild("DefaultChatSystemChatEvents") and ReplicatedStorage.DefaultChatSystemChatEvents:FindFirstChild("SayMessageRequest")
+    if remote then
+        remote:FireServer(text, "All")
+    end
+end
+
+-- ==========================================
+-- ANLIK SANSÜR KONTROLÜ (ANTI-TAG)
+-- ==========================================
+
+-- 1. Yeni Sistem İçin Dinleyici
+TextChatService.MessageReceived:Connect(function(textMessage)
+    if textMessage.TextSource and textMessage.TextSource.UserId == LocalPlayer.UserId then
+        -- Mesajın içinde '#' karakteri varsa direkt kaç
+        if string.find(textMessage.Text, "#") then
+            serverHop()
+        end
+    end
+end)
+
+-- 2. Eski Sistem ve Ekran Logları İçin Dinleyici
+task.spawn(function()
+    local playerGui = LocalPlayer:WaitForChild("PlayerGui", 10)
+    if playerGui then
+        playerGui.DescendantAdded:Connect(function(descendant)
+            -- Ekrana düşen herhangi bir text label senin adını ve '#' içeriyorsa
+            if descendant:IsA("TextLabel") then
+                task.wait() -- Metnin renderlanmasını bekle
+                local txt = descendant.Text
+                if string.find(txt, "#") and (string.find(txt, LocalPlayer.Name) or string.find(txt, LocalPlayer.DisplayName)) then
+                    serverHop()
+                end
+            end
+        end)
+    end
+end)
+
+-- ==========================================
+-- SPAM DÖNGÜSÜ (EN HIZLI HALİ)
+-- ==========================================
+print("[SYSTEM] Auto-Spam Başlatıldı!")
+
+task.spawn(function()
+    while not jumped do
+        sendMessage(MESSAGE)
+        task.wait(DELAY)
+    end
+end)
 
