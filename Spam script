@@ -3,25 +3,21 @@ if not game:IsLoaded() then
 end
 task.wait(4)
 
-pcall(function()
-    if writefile and readfile then
-        writefile("deltaspam_boot.lua", [[loadstring(game:HttpGet("https://raw.githubusercontent.com/relax-dev01/Spamchat.lua/main/script.lua"))()]])
-    end
-end)
-
-local MESSAGE = "Azerbaycan sohbet oyunu yaz gir"
-local MAX_SPAM_COUNT = 15 
-local DELAY = 0.05 
-
 local TeleportService = game:GetService("TeleportService")
 local HttpService = game:GetService("HttpService")
 local Players = game:GetService("Players")
 local TextChatService = game:GetService("TextChatService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-
 local LocalPlayer = Players.LocalPlayer or Players.PlayerAdded:Wait()
-local jumped = false
+
+if _G.DeltaSpamSystemActive then return end
+_G.DeltaSpamSystemActive = true
+
+local MESSAGE = "Azerbaycan sohbet oyunu yaz gir"
+local MAX_SPAM_COUNT = 15
+local DELAY = 0.08
 local currentSpamCount = 0
+local jumped = false
 
 local function getNextServer()
     local success, result = pcall(function()
@@ -44,20 +40,22 @@ end
 local function serverHop()
     if jumped then return end
     jumped = true
+    _G.DeltaSpamSystemActive = nil
     
-    task.wait(6) 
+    task.wait(5)
     local targetServerId = getNextServer()
     
     task.spawn(function()
         while true do
             pcall(function()
                 if targetServerId then
+                    -- Delta'nın autoexec motorunu uyandırmak için önce temiz bir çıkış-giriş simülasyonu yapıyoruz
                     TeleportService:TeleportToPlaceInstance(game.PlaceId, targetServerId, LocalPlayer)
                 else
                     TeleportService:Teleport(game.PlaceId, LocalPlayer)
                 end
             end)
-            task.wait(6)
+            task.wait(5)
         end
     end)
 end
@@ -81,20 +79,18 @@ local function sendMessage(text)
     end)
 end
 
-task.spawn(function()
+pcall(function()
     local playerGui = LocalPlayer:WaitForChild("PlayerGui", 25)
-    if playerGui then
-        playerGui.DescendantAdded:Connect(function(descendant)
-            if jumped then return end
-            if descendant:IsA("TextLabel") then
-                task.wait(0.02)
-                local txt = string.lower(descendant.Text)
-                if string.find(txt, "beklemelisin") or string.find(txt, "before sending") or string.find(txt, "#") then
-                    serverHop()
-                end
+    playerGui.DescendantAdded:Connect(function(descendant)
+        if jumped then return end
+        if descendant:IsA("TextLabel") then
+            task.wait(0.02)
+            local txt = string.lower(descendant.Text)
+            if string.find(txt, "beklemelisin") or string.find(txt, "before sending") or string.find(txt, "#") then
+                serverHop()
             end
-        end)
-    end
+        end
+    end)
 end)
 
 task.spawn(function()
