@@ -1,21 +1,18 @@
--- ==========================================
--- IPAD DELTA OTOMATİK YENİDEN BAŞLATMA AYARI
--- ==========================================
 if not game:IsLoaded() then
     game.Loaded:Wait()
 end
-task.wait(4) -- iPad Delta'nın kendine gelmesi için açılış emniyeti
+task.wait(4)
 
--- ==========================================
--- AYARLAR
--- ==========================================
+pcall(function()
+    if writefile and readfile then
+        writefile("deltaspam_boot.lua", [[loadstring(game:HttpGet("https://raw.githubusercontent.com/relax-dev01/Spamchat.lua/main/script.lua"))()]])
+    end
+end)
+
 local MESSAGE = "Azerbaycan sohbet oyunu yaz gir"
-local MAX_SPAM_COUNT = 15 -- Her sunucuda atılacak mesaj sayısı
-local DELAY = 0.1 -- Tüm oyunlarda chat ban yememek için en kararlı hız süresi
+local MAX_SPAM_COUNT = 15 
+local DELAY = 0.05 
 
--- ==========================================
--- SERVİSLER
--- ==========================================
 local TeleportService = game:GetService("TeleportService")
 local HttpService = game:GetService("HttpService")
 local Players = game:GetService("Players")
@@ -26,18 +23,19 @@ local LocalPlayer = Players.LocalPlayer or Players.PlayerAdded:Wait()
 local jumped = false
 local currentSpamCount = 0
 
--- ==========================================
--- OTOMATİK TETİKLEME VE KORUMALI SUNUCU DEĞİŞTİRİCİ
--- ==========================================
 local function getNextServer()
     local success, result = pcall(function()
         local url = "https://games.roblox.com/v1/games/" .. game.PlaceId .. "/servers/Public?sortOrder=Asc&limit=100"
         local raw = game:HttpGet(url)
         local servers = HttpService:JSONDecode(raw)
+        local validServers = {}
         for _, server in pairs(servers.data) do
             if server.playing < server.maxPlayers and server.id ~= game.JobId then
-                return server.id
+                table.insert(validServers, server.id)
             end
+        end
+        if #validServers > 0 then
+            return validServers[math.random(1, #validServers)]
         end
     end)
     return success and result or nil
@@ -47,23 +45,7 @@ local function serverHop()
     if jumped then return end
     jumped = true
     
-    print("[SYSTEM] Limit doldu. Diğer sunucuda otomatik başlatma ayarlanıyor...")
-    
-    -- DELTA OTO-BAŞLATICI (Kritik Bölüm): 
-    -- Yeni sunucuya geçerken bu kodun kendisini otomatik çalıştırması için sıraya alıyoruz.
-    local queueScript = [[
-        loadstring(game:HttpGet("https://raw.githubusercontent.com/relax-dev01/Spamchat.lua/main/script.lua"))()
-    ]]
-    
-    if queue_on_teleport then
-        queue_on_teleport(queueScript)
-    elseif syn and syn.queue_on_teleport then
-        syn.queue_on_teleport(queueScript)
-    end
-    
-    -- 267 Hata kodu (Kick) yememek için sunucudan ayrılmadan önce 5 saniye bekliyoruz
-    task.wait(5) 
-    
+    task.wait(6) 
     local targetServerId = getNextServer()
     
     task.spawn(function()
@@ -75,17 +57,13 @@ local function serverHop()
                     TeleportService:Teleport(game.PlaceId, LocalPlayer)
                 end
             end)
-            task.wait(5) -- Sunucu hatası durumunda döngü
+            task.wait(6)
         end
     end)
 end
 
--- ==========================================
--- MESAJ GÖNDERME MOTORU
--- ==========================================
 local function sendMessage(text)
     if jumped then return end
-    
     pcall(function()
         if TextChatService.ChatVersion == Enum.ChatVersion.TextChatService then
             local textChannel = TextChatService:FindFirstChild("TextChannels") and TextChatService.TextChannels:FindFirstChild("RBXGeneral")
@@ -103,9 +81,22 @@ local function sendMessage(text)
     end)
 end
 
--- ==========================================
--- SPAM BAŞLATICI
--- ==========================================
+task.spawn(function()
+    local playerGui = LocalPlayer:WaitForChild("PlayerGui", 25)
+    if playerGui then
+        playerGui.DescendantAdded:Connect(function(descendant)
+            if jumped then return end
+            if descendant:IsA("TextLabel") then
+                task.wait(0.02)
+                local txt = string.lower(descendant.Text)
+                if string.find(txt, "beklemelisin") or string.find(txt, "before sending") or string.find(txt, "#") then
+                    serverHop()
+                end
+            end
+        end)
+    end
+end)
+
 task.spawn(function()
     while not jumped do
         if currentSpamCount >= MAX_SPAM_COUNT then
