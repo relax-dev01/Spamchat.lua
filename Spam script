@@ -1,11 +1,16 @@
+-- Oyuna tam girip girmediğimizi kontrol etmek için yükleme ekranını bekletiyoruz (Autoexec sabitleyici)
+if not game:IsLoaded() then
+    game.Loaded:Wait()
+end
+
 -- ==========================================
 -- AYARLAR
 -- ==========================================
-local MESSAGE = "Azerbaycan sohbet oyunu yaz gir" -- İstediğin spam mesajı ayarlandı
-local DELAY = 0.05 -- En hızlı spam süresi
+local MESSAGE = "Azerbaycan sohbet oyunu yaz gir"
+local DELAY = 0.6 -- Blox Fruits'ın hız engelini aşmak için en ideal süre
 
 -- ==========================================
--- SERVİSLER
+-- SERVİSLER & TANIMLAMALAR
 -- ==========================================
 local TeleportService = game:GetService("TeleportService")
 local HttpService = game:GetService("HttpService")
@@ -13,85 +18,84 @@ local Players = game:GetService("Players")
 local TextChatService = game:GetService("TextChatService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
-local LocalPlayer = Players.LocalPlayer
-local jumped = false -- Çift tetiklenmeyi önlemek için flag
+-- Oyuncu objesinin tamamen oluştuğundan emin oluyoruz
+local LocalPlayer = Players.LocalPlayer or Players.PlayerAdded:Wait()
+local jumped = false
+
+-- Keşfedilen yeni sunucu ID'sini hafızada tutmak için dosya kontrolü (Autoexec hafızası)
+local function getNextServer()
+    local success, result = pcall(function()
+        local url = "https://games.roblox.com/v1/games/" .. game.PlaceId .. "/servers/Public?sortOrder=Asc&limit=100"
+        local raw = game:HttpGet(url)
+        local servers = HttpService:JSONDecode(raw)
+        for _, server in pairs(servers.data) do
+            if server.playing < server.maxPlayers and server.id ~= game.JobId then
+                return server.id
+            end
+        end
+    end)
+    return success and result or nil
+end
 
 -- ==========================================
--- IŞINLANMA (SERVER HOP) FONKSİYONU
+-- SERVER HOP MOTORU
 -- ==========================================
 local function serverHop()
     if jumped then return end
     jumped = true
-    print("[SYSTEM] Tetikleyici algılandı! Yeni sunucuya geçiliyor...")
+    print("[SYSTEM] Tetikleyici yakalandı! Güvenli sunucu geçişi başlatılıyor...")
     
-    pcall(function()
-        local url = "https://games.roblox.com/v1/games/" .. game.PlaceId .. "/servers/Public?sortOrder=Asc&limit=100"
-        local raw = game:HttpGet(url)
-        local servers = HttpService:JSONDecode(raw)
-        
-        for _, server in pairs(servers.data) do
-            if server.playing < server.maxPlayers and server.id ~= game.JobId then
-                TeleportService:TeleportToPlaceInstance(game.PlaceId, server.id, LocalPlayer)
-                break
-            end
+    local targetServerId = getNextServer()
+    
+    -- Teleport döngüsü (Işınlanana kadar zorlar)
+    task.spawn(function()
+        while true do
+            pcall(function()
+                if targetServerId then
+                    TeleportService:TeleportToPlaceInstance(game.PlaceId, targetServerId, LocalPlayer)
+                else
+                    TeleportService:Teleport(game.PlaceId, LocalPlayer)
+                end
+            end)
+            task.wait(3) -- Eğer sunucu doluysa veya hata verirse 3 saniyede bir yeniden dener
         end
     end)
-    
-    -- Eğer üstteki api yanıt vermezse alternatif olarak direkt ışınla
-    task.wait(1)
-    TeleportService:Teleport(game.PlaceId, LocalPlayer)
 end
 
 -- ==========================================
 -- MESAJ GÖNDERME MOTORU
 -- ==========================================
 local function sendMessage(text)
-    -- Yeni nesil sohbet sistemi (TextChatService)
-    if TextChatService.ChatVersion == Enum.ChatVersion.TextChatService then
-        local textChannel = TextChatService:FindFirstChild("TextChannels") and TextChatService.TextChannels:FindFirstChild("RBXGeneral")
-        if textChannel then
-            textChannel:SendAsync(text)
-            return
+    if jumped then return end
+    pcall(function()
+        if TextChatService.ChatVersion == Enum.ChatVersion.TextChatService then
+            local textChannel = TextChatService:FindFirstChild("TextChannels") and TextChatService.TextChannels:FindFirstChild("RBXGeneral")
+            if textChannel then
+                textChannel:SendAsync(text)
+            end
+        else
+            local remote = ReplicatedStorage:FindFirstChild("DefaultChatSystemChatEvents") and ReplicatedStorage.DefaultChatSystemChatEvents:FindFirstChild("SayMessageRequest")
+            if remote then
+                remote:FireServer(text, "All")
+            end
         end
-    end
-    
-    -- Eski nesil sohbet sistemi (LegacyChat)
-    local remote = ReplicatedStorage:FindFirstChild("DefaultChatSystemChatEvents") and ReplicatedStorage.DefaultChatSystemChatEvents:FindFirstChild("SayMessageRequest")
-    if remote then
-        remote:FireServer(text, "All")
-    end
+    end)
 end
 
 -- ==========================================
--- ANLIK SANSÜR VE RESTRİKSİYON KONTROLÜ
+-- ANLIK EKRAN VE CHAT TAKİBİ
 -- ==========================================
-
--- 1. Yeni Sistem İçin Dinleyici
-TextChatService.MessageReceived:Connect(function(textMessage)
-    if textMessage.TextSource and textMessage.TextSource.UserId == LocalPlayer.UserId then
-        -- Kendi mesajımız sansür yerse (# içerirse)
-        if string.find(textMessage.Text, "#") then
-            serverHop()
-        end
-    end
-end)
-
--- 2. Eski Sistem, Ekran Logları ve Sistem Uyarıları İçin Genel Dinleyici
 task.spawn(function()
-    local playerGui = LocalPlayer:WaitForChild("PlayerGui", 10)
+    -- UI elementlerinin yüklenmesi için güvenli bekleme
+    local playerGui = LocalPlayer:WaitForChild("PlayerGui", 30)
     if playerGui then
         playerGui.DescendantAdded:Connect(function(descendant)
+            if jumped then return end
             if descendant:IsA("TextLabel") then
-                task.wait() -- Metnin tam renderlanmasını bekle
-                local txt = descendant.Text
+                task.wait(0.05) -- Yazının ekrana tam oturmasını bekle
+                local txt = string.lower(descendant.Text)
                 
-                -- KONTROL A: Sansür Kontrolü (Kullanıcı adı ve # eşleşmesi)
-                if string.find(txt, "#") and (string.find(txt, LocalPlayer.Name) or string.find(txt, LocalPlayer.DisplayName)) then
-                    serverHop()
-                end
-                
-                -- KONTROL B: Hız Sınırı / Bekleme Uyarısı Kontrolü
-                if string.find(txt, "başka bir mesaj göndermeden önce beklemelisin") or string.find(txt, "wait before sending another message") then
+                if string.find(txt, "beklemelisin") or string.find(txt, "before sending") or string.find(txt, "#") then
                     serverHop()
                 end
             end
@@ -99,15 +103,24 @@ task.spawn(function()
     end
 end)
 
--- ==========================================
--- SPAM DÖNGÜSÜ
--- ==========================================
-print("[SYSTEM] Auto-Spam ve Filtre Kontrolü Başlatıldı!")
+-- Yeni chat sistemi için koruma filtresi
+TextChatService.MessageReceived:Connect(function(textMessage)
+    if jumped then return end
+    if textMessage.TextSource and textMessage.TextSource.UserId == LocalPlayer.UserId then
+        if string.find(textMessage.Text, "#") then
+            serverHop()
+        end
+    end
+end)
 
+-- ==========================================
+-- SPAM BAŞLATICI
+-- ==========================================
+print("[SYSTEM] Autoexec Korumalı Döngü Aktif!")
 task.spawn(function()
+    task.wait(2) -- Oyuna ilk girişte donmaları önlemek için 2 saniye güvenlik boşluğu
     while not jumped do
         sendMessage(MESSAGE)
         task.wait(DELAY)
     end
 end)
-
