@@ -15,7 +15,7 @@ _G.DeltaServerHopActive = true
 
 local MESSAGE = "Azerbaycan sohbet oyunu yaz gir"
 local MAX_SPAM_COUNT = 15
-local DELAY = 1.5 
+local DELAY = 0.2 
 local currentSpamCount = 0
 local jumped = false
 
