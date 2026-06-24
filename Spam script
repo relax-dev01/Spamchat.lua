@@ -1,14 +1,16 @@
--- Genel Oyunlar İçin Yükleme Ekranı Bariyeri
+-- ==========================================
+-- IPAD DELTA OTOMATİK YENİDEN BAŞLATMA AYARI
+-- ==========================================
 if not game:IsLoaded() then
     game.Loaded:Wait()
 end
-task.wait(4) -- Yeni sunucuya girildiğinde haritanın ve arayüzün oturması için 4 saniye güvenlik süresi
+task.wait(4) -- iPad Delta'nın kendine gelmesi için açılış emniyeti
 
 -- ==========================================
 -- AYARLAR
 -- ==========================================
 local MESSAGE = "Azerbaycan sohbet oyunu yaz gir"
-local MAX_SPAM_COUNT = 10 -- Her sunucuda atılacak mesaj sayısı
+local MAX_SPAM_COUNT = 15 -- Her sunucuda atılacak mesaj sayısı
 local DELAY = 0.1 -- Tüm oyunlarda chat ban yememek için en kararlı hız süresi
 
 -- ==========================================
@@ -25,7 +27,7 @@ local jumped = false
 local currentSpamCount = 0
 
 -- ==========================================
--- GENEL SERVER HOP MOTORU (267 KICK KORUMALI)
+-- OTOMATİK TETİKLEME VE KORUMALI SUNUCU DEĞİŞTİRİCİ
 -- ==========================================
 local function getNextServer()
     local success, result = pcall(function()
@@ -45,10 +47,21 @@ local function serverHop()
     if jumped then return end
     jumped = true
     
-    print("[SYSTEM] 15 Mesaj atıldı. Kick yememek için güvenli çıkış bekleniyor...")
+    print("[SYSTEM] Limit doldu. Diğer sunucuda otomatik başlatma ayarlanıyor...")
     
-    -- Hata Kodu 267 Almamak İçin Kritik Bekleme Süresi
-    -- Sunucudan ayrılmadan önce oyunun verilerini kaydetmesi için 5 saniye frene basıyoruz
+    -- DELTA OTO-BAŞLATICI (Kritik Bölüm): 
+    -- Yeni sunucuya geçerken bu kodun kendisini otomatik çalıştırması için sıraya alıyoruz.
+    local queueScript = [[
+        loadstring(game:HttpGet("https://raw.githubusercontent.com/relax-dev01/Spamchat.lua/main/script.lua"))()
+    ]]
+    
+    if queue_on_teleport then
+        queue_on_teleport(queueScript)
+    elseif syn and syn.queue_on_teleport then
+        syn.queue_on_teleport(queueScript)
+    end
+    
+    -- 267 Hata kodu (Kick) yememek için sunucudan ayrılmadan önce 5 saniye bekliyoruz
     task.wait(5) 
     
     local targetServerId = getNextServer()
@@ -62,7 +75,7 @@ local function serverHop()
                     TeleportService:Teleport(game.PlaceId, LocalPlayer)
                 end
             end)
-            task.wait(5) -- Bağlantı kurulamazsa her 5 saniyede bir tekrar dener
+            task.wait(5) -- Sunucu hatası durumunda döngü
         end
     end)
 end
@@ -89,26 +102,6 @@ local function sendMessage(text)
         end
     end)
 end
-
--- ==========================================
--- ANLIK GENEL SANSÜR / UYARI TAKİBİ
--- ==========================================
-task.spawn(function()
-    local playerGui = LocalPlayer:WaitForChild("PlayerGui", 25)
-    if playerGui then
-        playerGui.DescendantAdded:Connect(function(descendant)
-            if jumped then return end
-            if descendant:IsA("TextLabel") then
-                task.wait(0.05)
-                local txt = string.lower(descendant.Text)
-                -- Hangi oyun olursa olsun ekrana düşen filtre uyarılarını yakalar
-                if string.find(txt, "beklemelisin") or string.find(txt, "before sending") or string.find(txt, "#") then
-                    serverHop()
-                end
-            end
-        end)
-    end
-end)
 
 -- ==========================================
 -- SPAM BAŞLATICI
