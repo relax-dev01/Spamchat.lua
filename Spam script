@@ -7,8 +7,8 @@ end
 -- AYARLAR
 -- ==========================================
 local MESSAGE = "Azerbaycan sohbet oyunu yaz gir"
-local MAX_SPAM_COUNT = 15 -- 15 mesaj attıktan sonra direkt kaçacak
-local DELAY = 0.01 -- Olabilecek en yüksek hız
+local MAX_SPAM_COUNT = 10 -- 10 mesaj attıktan sonra direkt kaçacak
+local DELAY = 0.05 -- Olabilecek en yüksek hız
 
 -- ==========================================
 -- SERVİSLER & TANIMLAMALAR
