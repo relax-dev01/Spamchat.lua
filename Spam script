@@ -1,17 +1,18 @@
--- Oyuna tam girip girmediğimizi kontrol etmek için yükleme ekranını bekletiyoruz (Autoexec sabitleyici)
+-- iPad Delta Koruması: Oyun yüklenene ve arayüz oturana kadar scripti tamamen uyutuyoruz
 if not game:IsLoaded() then
     game.Loaded:Wait()
 end
+task.wait(4) -- iPad'in işlemcisine zaman tanımak için sunucu girişinde 4 saniye ekstra bekletme
 
 -- ==========================================
 -- AYARLAR
 -- ==========================================
 local MESSAGE = "Azerbaycan sohbet oyunu yaz gir"
-local MAX_SPAM_COUNT = 10 -- 10 mesaj attıktan sonra direkt kaçacak
-local DELAY = 0.05 -- Olabilecek en yüksek hız
+local MAX_SPAM_COUNT = 15 
+local DELAY = 0.08 -- Mobil cihazlarda lagı önlemek için hafifçe optimize edildi
 
 -- ==========================================
--- SERVİSLER & TANIMLAMALAR
+-- SERVİSLER
 -- ==========================================
 local TeleportService = game:GetService("TeleportService")
 local HttpService = game:GetService("HttpService")
@@ -21,10 +22,10 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local LocalPlayer = Players.LocalPlayer or Players.PlayerAdded:Wait()
 local jumped = false
-local currentSpamCount = 0 -- Gönderilen mesajları sayacak değişken
+local currentSpamCount = 0
 
 -- ==========================================
--- GELİŞMİŞ SERVER HOP MOTORU
+-- MOBİL UYUMLU SERVER HOP (KICK KORUMALI)
 -- ==========================================
 local function getNextServer()
     local success, result = pcall(function()
@@ -43,7 +44,9 @@ end
 local function serverHop()
     if jumped then return end
     jumped = true
-    print("[SYSTEM] 15 Mesaj sınırına ulaşıldı! Yeni sunucuya geçiliyor...")
+    
+    print("[SYSTEM] Limite ulaşıldı. Mobil geçiş güvenliği aktif...")
+    task.wait(3) -- Hata kodu 267 (Kick) yememek için tam 3 saniye bekletme
     
     local targetServerId = getNextServer()
     
@@ -56,7 +59,7 @@ local function serverHop()
                     TeleportService:Teleport(game.PlaceId, LocalPlayer)
                 end
             end)
-            task.wait(3) -- Sunucu hatası veya doluluk durumunda 3 saniyede bir yeniden dener
+            task.wait(5) -- iPad bağlantı gecikmesi için 5 saniye bekle ve tekrar dene
         end
     end)
 end
@@ -85,7 +88,7 @@ local function sendMessage(text)
 end
 
 -- ==========================================
--- ANLIK SANSÜR KORUMASI (YEDEK OLARAK DURUYOR)
+-- SANSÜR KORUMASI
 -- ==========================================
 task.spawn(function()
     local playerGui = LocalPlayer:WaitForChild("PlayerGui", 30)
@@ -104,19 +107,14 @@ task.spawn(function()
 end)
 
 -- ==========================================
--- SPAM DÖNGÜSÜ (SAYAÇ KONTROLLÜ)
+-- SPAM DÖNGÜSÜ
 -- ==========================================
-print("[SYSTEM] Sayaç Modu Aktif! Hedef: 15 Mesaj.")
-
 task.spawn(function()
-    task.wait(2) -- Girişteki donmaları önlemek için güvenlik beklemesi
-    
     while not jumped do
         if currentSpamCount >= MAX_SPAM_COUNT then
             serverHop()
             break
         end
-        
         sendMessage(MESSAGE)
         task.wait(DELAY)
     end
