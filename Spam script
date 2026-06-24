@@ -1,8 +1,8 @@
 -- ==========================================
 -- AYARLAR
 -- ==========================================
-local MESSAGE = "Azerbaycan sohbet oyunu yaz gir" -- Spamlanacak mesaj
-local DELAY = 0.05 -- En hızlı spam süresi (Çok düşerse Roblox tamamen engelleyebilir, 0.05 idealdir)
+local MESSAGE = "Azerbaycan sohbet oyunu yaz gir" -- İstediğin spam mesajı ayarlandı
+local DELAY = 0.05 -- En hızlı spam süresi
 
 -- ==========================================
 -- SERVİSLER
@@ -22,7 +22,7 @@ local jumped = false -- Çift tetiklenmeyi önlemek için flag
 local function serverHop()
     if jumped then return end
     jumped = true
-    print("[SYSTEM] Sansür algılandı! Yeni sunucuya geçiliyor...")
+    print("[SYSTEM] Tetikleyici algılandı! Yeni sunucuya geçiliyor...")
     
     pcall(function()
         local url = "https://games.roblox.com/v1/games/" .. game.PlaceId .. "/servers/Public?sortOrder=Asc&limit=100"
@@ -37,7 +37,7 @@ local function serverHop()
         end
     end)
     
-    -- Eğer üstteki api patlarsa alternatif olarak direkt rastgele ışınla
+    -- Eğer üstteki api yanıt vermezse alternatif olarak direkt ışınla
     task.wait(1)
     TeleportService:Teleport(game.PlaceId, LocalPlayer)
 end
@@ -63,29 +63,35 @@ local function sendMessage(text)
 end
 
 -- ==========================================
--- ANLIK SANSÜR KONTROLÜ (ANTI-TAG)
+-- ANLIK SANSÜR VE RESTRİKSİYON KONTROLÜ
 -- ==========================================
 
 -- 1. Yeni Sistem İçin Dinleyici
 TextChatService.MessageReceived:Connect(function(textMessage)
     if textMessage.TextSource and textMessage.TextSource.UserId == LocalPlayer.UserId then
-        -- Mesajın içinde '#' karakteri varsa direkt kaç
+        -- Kendi mesajımız sansür yerse (# içerirse)
         if string.find(textMessage.Text, "#") then
             serverHop()
         end
     end
 end)
 
--- 2. Eski Sistem ve Ekran Logları İçin Dinleyici
+-- 2. Eski Sistem, Ekran Logları ve Sistem Uyarıları İçin Genel Dinleyici
 task.spawn(function()
     local playerGui = LocalPlayer:WaitForChild("PlayerGui", 10)
     if playerGui then
         playerGui.DescendantAdded:Connect(function(descendant)
-            -- Ekrana düşen herhangi bir text label senin adını ve '#' içeriyorsa
             if descendant:IsA("TextLabel") then
-                task.wait() -- Metnin renderlanmasını bekle
+                task.wait() -- Metnin tam renderlanmasını bekle
                 local txt = descendant.Text
+                
+                -- KONTROL A: Sansür Kontrolü (Kullanıcı adı ve # eşleşmesi)
                 if string.find(txt, "#") and (string.find(txt, LocalPlayer.Name) or string.find(txt, LocalPlayer.DisplayName)) then
+                    serverHop()
+                end
+                
+                -- KONTROL B: Hız Sınırı / Bekleme Uyarısı Kontrolü
+                if string.find(txt, "başka bir mesaj göndermeden önce beklemelisin") or string.find(txt, "wait before sending another message") then
                     serverHop()
                 end
             end
@@ -94,9 +100,9 @@ task.spawn(function()
 end)
 
 -- ==========================================
--- SPAM DÖNGÜSÜ (EN HIZLI HALİ)
+-- SPAM DÖNGÜSÜ
 -- ==========================================
-print("[SYSTEM] Auto-Spam Başlatıldı!")
+print("[SYSTEM] Auto-Spam ve Filtre Kontrolü Başlatıldı!")
 
 task.spawn(function()
     while not jumped do
