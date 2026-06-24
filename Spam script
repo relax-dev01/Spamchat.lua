@@ -1,7 +1,7 @@
 if not game:IsLoaded() then
     game.Loaded:Wait()
 end
-task.wait(4)
+task.wait(6)
 
 local TeleportService = game:GetService("TeleportService")
 local HttpService = game:GetService("HttpService")
@@ -10,12 +10,12 @@ local TextChatService = game:GetService("TextChatService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local LocalPlayer = Players.LocalPlayer or Players.PlayerAdded:Wait()
 
-if _G.DeltaSpamSystemActive then return end
-_G.DeltaSpamSystemActive = true
+if _G.DeltaSafeSpamActive then return end
+_G.DeltaSafeSpamActive = true
 
 local MESSAGE = "Azerbaycan sohbet oyunu yaz gir"
 local MAX_SPAM_COUNT = 15
-local DELAY = 0.08
+local DELAY = 1.5 -- Mesajlar arası 1.5 saniye beklenecek (Çok daha yavaş ve güvenli)
 local currentSpamCount = 0
 local jumped = false
 
@@ -40,22 +40,24 @@ end
 local function serverHop()
     if jumped then return end
     jumped = true
-    _G.DeltaSpamSystemActive = nil
+    _G.DeltaSafeSpamActive = nil
     
-    task.wait(5)
+    -- YAVAŞLATMA BÖLÜMÜ: 15 mesaj bittikten sonra sunucudan hemen kaçmıyor.
+    -- Tam 12 saniye boyunca oyunda sakince bekliyor ki veri kaydı tamamlansın ve Delta sıfırlanmasın.
+    task.wait(12)
+    
     local targetServerId = getNextServer()
     
     task.spawn(function()
         while true do
             pcall(function()
                 if targetServerId then
-                    -- Delta'nın autoexec motorunu uyandırmak için önce temiz bir çıkış-giriş simülasyonu yapıyoruz
                     TeleportService:TeleportToPlaceInstance(game.PlaceId, targetServerId, LocalPlayer)
                 else
                     TeleportService:Teleport(game.PlaceId, LocalPlayer)
                 end
             end)
-            task.wait(5)
+            task.wait(8) -- Bağlanamazsa acele etmeden 8 saniyede bir yeniden dener
         end
     end)
 end
@@ -84,7 +86,7 @@ pcall(function()
     playerGui.DescendantAdded:Connect(function(descendant)
         if jumped then return end
         if descendant:IsA("TextLabel") then
-            task.wait(0.02)
+            task.wait(0.05)
             local txt = string.lower(descendant.Text)
             if string.find(txt, "beklemelisin") or string.find(txt, "before sending") or string.find(txt, "#") then
                 serverHop()
