@@ -1,7 +1,7 @@
 if not game:IsLoaded() then
     game.Loaded:Wait()
 end
-task.wait(6)
+task.wait(5)
 
 local TeleportService = game:GetService("TeleportService")
 local HttpService = game:GetService("HttpService")
@@ -10,26 +10,31 @@ local TextChatService = game:GetService("TextChatService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local LocalPlayer = Players.LocalPlayer or Players.PlayerAdded:Wait()
 
-if _G.DeltaSafeSpamActive then return end
-_G.DeltaSafeSpamActive = true
+if _G.DeltaServerHopActive then return end
+_G.DeltaServerHopActive = true
 
 local MESSAGE = "Azerbaycan sohbet oyunu yaz gir"
 local MAX_SPAM_COUNT = 15
-local DELAY = 1.5 -- Mesajlar arası 1.5 saniye beklenecek (Çok daha yavaş ve güvenli)
+local DELAY = 1.5 
 local currentSpamCount = 0
 local jumped = false
 
-local function getNextServer()
+local function getAbsoluteNewServer()
     local success, result = pcall(function()
-        local url = "https://games.roblox.com/v1/games/" .. game.PlaceId .. "/servers/Public?sortOrder=Asc&limit=100"
+        -- Oyunun aktif 100 sunucusunu listeliyoruz
+        local url = "https://games.roblox.com/v1/games/" .. game.PlaceId .. "/servers/Public?sortOrder=Desc&limit=100"
         local raw = game:HttpGet(url)
         local servers = HttpService:JSONDecode(raw)
         local validServers = {}
+        
         for _, server in pairs(servers.data) do
-            if server.playing < server.maxPlayers and server.id ~= game.JobId then
+            -- Sunucuda yer olacak ve KESİNLİKLE şu anki sunucumuzun ID'sine eşit olmayacak
+            if server.playing < server.maxPlayers and server.id ~= game.JobId and server.playing > 1 then
                 table.insert(validServers, server.id)
             end
         end
+        
+        -- Listeden tamamen rastgele bir sunucu seçerek çakışmayı önlüyoruz
         if #validServers > 0 then
             return validServers[math.random(1, #validServers)]
         end
@@ -40,24 +45,24 @@ end
 local function serverHop()
     if jumped then return end
     jumped = true
-    _G.DeltaSafeSpamActive = nil
+    _G.DeltaServerHopActive = nil
     
-    -- YAVAŞLATMA BÖLÜMÜ: 15 mesaj bittikten sonra sunucudan hemen kaçmıyor.
-    -- Tam 12 saniye boyunca oyunda sakince bekliyor ki veri kaydı tamamlansın ve Delta sıfırlanmasın.
-    task.wait(12)
+    -- Verilerin hatasız kaydedilmesi için 6 saniye tam emniyet beklemesi
+    task.wait(6)
     
-    local targetServerId = getNextServer()
+    local targetServerId = getAbsoluteNewServer()
     
     task.spawn(function()
         while true do
             pcall(function()
                 if targetServerId then
+                    -- Doğrudan o farklı sunucunun içine hedef gözeterek ışınlar (Kick yemeyi engeller)
                     TeleportService:TeleportToPlaceInstance(game.PlaceId, targetServerId, LocalPlayer)
                 else
                     TeleportService:Teleport(game.PlaceId, LocalPlayer)
                 end
             end)
-            task.wait(8) -- Bağlanamazsa acele etmeden 8 saniyede bir yeniden dener
+            task.wait(7)
         end
     end)
 end
